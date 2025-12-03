@@ -1,23 +1,29 @@
-from trl import DPOTrainer
-from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
 from datasets import load_dataset
+from transformers import AutoTokenizer
+from mlx_lm import Trainer, LoraConfig, load, save
+
+model, tokenizer = load("models/sft-mlx")
 
 prefs = load_dataset("json", data_files="data/dpo.jsonl", split="train")
-model = AutoModelForCausalLM.from_pretrained("models/sft")
 
-training_args = TrainingArguments(
-    output_dir="models/dpo",
-    per_device_train_batch_size=1,
-    gradient_accumulation_steps=16,
-    learning_rate=5e-6,
-    num_train_epochs=2
+lora_cfg = LoraConfig(
+    r=16,
+    lora_alpha=32,
+    target_modules=["q_proj", "v_proj"]
 )
 
-trainer = DPOTrainer(
+trainer = Trainer(
     model=model,
-    args=training_args,
+    tokenizer=tokenizer,
+    train_dataset=prefs,
+    lora=lora_cfg,
+    objective="dpo",
     beta=0.1,
-    train_dataset=prefs
+    epochs=2,
+    batch_size=1,
+    lr=5e-6,
 )
 
 trainer.train()
+
+save(model, "models/dpo-mlx")
