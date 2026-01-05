@@ -1,138 +1,126 @@
-import mlx.core as mx
-import mlx.nn as nn
-import mlx.optimizers as optim
-from mlx_lm import load, save
-from mlx_lm.tuner import train, linear_to_lora_layers
-from datasets import load_dataset
-import numpy as np
+"""
+Supervised Fine-Tuning (SFT) using MLX + LoRA
+Model: MISTRAL 7B Instruct (4-bit, MLX)
+Dataset: Curated FinTech instruction-response pairs
+"""
+
+import time
+# import random
+from pathlib import Path
+# from helpers import format_prompt, load_sft_dataset, save_lora_adapters
+
+# import mlx.core as mx
+# import mlx.optimizers as optim
+# from mlx_lm import load
+# from mlx_lm.tuner import train
+# from datasets import load_dataset
+from mlx_lm_lora.train import train as lora_train
+
+def save_lora_adapters(model, output_dir):
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    lora_params = {
+        k: v
+        for k, v in model.parameters().items()
+        if "lora" in k.lower()
+    }
+
+    mx.save_safetensors(
+        str(Path(output_dir) / "lora_adapters.safetensors"),
+        lora_params
+    )
+
+    print(f"Saved {len(lora_params)} LoRA tensors")
+
+# Config
+MODEL_PATH = "mlx-community/Mistral-7B-Instruct-v0.2-4bit"
+DATA_DIR = "data/sft_final" 
+DATA_PATH = "data/sft.jsonl"
+OUTPUT_DIR = "models/sft_mlx"
+
+TRAIN_CONFIG = {
+    "batch_size": 1,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 2e-4,
+    "epochs": 1,
+    "max_seq_length": 512,
+}
+
+LORA_CONFIG = {
+    "rank": 16,
+    "alpha": 32,
+    "dropout": 0.05,
+}
 
 def main():
-    # 1. Model Loading
-    # Original: model_name = "mlx-community/Meta-Llama-3-8B-Instruct-4bit-mlx"
-    # We keep the same model path.
-    model_path = "mlx-community/Meta-Llama-3-8B-Instruct-4bit-mlx"
-    
-    print(f"Loading model from {model_path}")
-    model, tokenizer = load(model_path)
-    
-    # 2. LoRA Configuration
-    # Original: 
-    # lora_config = LoraConfig(
-    #     r=32,
-    #     lora_alpha=16,
-    #     lora_dropout=0.05,
-    #     target_modules=["q_proj", "v_proj"]
-    # )
-    #
-    # In MLX, we freeze the model first, then convert linear layers to LoRA.
-    model.freeze()
-    
-    # linear_to_lora_layers(model, rank, keys)
-    # Note: MLX handles alpha scaling internally or via the layer definition. 
-    # Standard implementation often uses alpha/rank scaling.
-    linear_to_lora_layers(model, 32, {"q_proj", "v_proj"})
-    
-    print("Model converted to LoRA")
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
-    # 3. Data Loading
-    # Original: dataset = load_dataset("json", data_files="data/sft.jsonl", split="train")
-    dataset = load_dataset("json", data_files="data/sft.jsonl", split="train")
+    print("Starting MLX LoRA SFT training")
 
-    # 4. Training Hyperparameters
-    # Original:
-    # output_dir="models/sft"
-    # per_device_train_batch_size=1
-    # gradient_accumulation_steps=8
-    # learning_rate=2e-4
-    # num_train_epochs=2
-    # logging_steps=50
+    start_time = time.time() # I am adding a timing component to see how it compares to Hugging Face later
+
+    lora_train(
+        model=MODEL_PATH,
+        data=DATA_DIR,
+        output_dir=OUTPUT_DIR,
+        lora_config=LORA_CONFIG,
+        **TRAIN_CONFIG,
+    )
+
+    print(f"Training completion: {((time.time() - start_time) / 60):.2f} minutes")
+    print(f"Adapters saved to {OUTPUT_DIR}")
+
+
+# def main():
+#     # Load Model
+#     model, tokenizer = load(MODEL_PATH)
+
+#     # Load and configure dataset
+#     dataset = load_sft_dataset(DATA_PATH)
+#     random.shuffle(dataset)
+
+#     tokenized_dataset = [
+#         tokenizer.encode(ex, max_length=MAX_TOKENS, truncation=True) for ex in dataset
+#     ]
+
+#     optimizer = optim.AdamW(learning_rate=LEARNING_RATE)
+
+#     # Training Start
+
+#     # Initialize
+#     start_time = time.time() # I am adding a timing component to see how it compares to Hugging Face later
+#     losses = []
+#     step = 0
+
+#     for epoch in range(EPOCHS):
+#         print(f"Epoch: {epoch}")
+#         for tokens in tokenized_dataset:
+#             loss = tuner.train(
+#                 model,
+#                 optimizer,
+#                 tokens,
+#                 batch_size=BATCH_SIZE,
+#                 grad_accum_steps=GRAD_ACCUM_STEPS,
+#                 lora_config=LORA_CONFIG
+#             )
+
+#             losses.append(float(loss))
+#             step += 1
+
+#             if step % LOGGING_STEPS == 0:
+#                 avg_loss = np.mean(losses[-LOGGING_STEPS:]) # Get the average loss for the latest [LOGGING_STEPS] amount of steps
+#                 print(f"Step: {step}| Avg Loss: {avg_loss:.4f}| Time: {time.time() - start_time:.2f}s")
+
+#             # Flushing Compute Graph
+#             mx.eval(model.parameters())
+
+#     print(f"\nTraining completion: {((time.time() - start_time) / 60):.2f} minutes")
     
-    learning_rate = 2e-4
-    num_epochs = 2
-    batch_size = 1
-    grad_accumulation_steps = 8
-    logging_steps = 50
-    output_dir = "models/sft"
+#     # Saving Model Parameters
+#     Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+#     save_lora_adapters(model, OUTPUT_DIR)
+#     print(f"Saved LoRA adapters to {OUTPUT_DIR}")
 
-    # Optimizer
-    optimizer = optim.Adam(learning_rate=learning_rate)
-    
-    # Loss function
-    def loss_fn(model, X, y):
-        logits = model(X)
-        # We ignore the index -100 which is standard for padding in HF, 
-        # but here we need to handle masking if our data has it.
-        # For simplicity in this script, we assume the dataset returns 'input_ids' and 'labels'.
-        # Cross entropy in MLX expects logits and targets.
-        
-        # Shift logits and labels for causal LM training
-        # logits: [B, T, V] -> [B, T-1, V]
-        # labels: [B, T]    -> [B, T-1]
-        logits = logits[:, :-1, :]
-        y = y[:, 1:]
-        
-        # Create a mask for padding (assuming 0 or -100 is pad)
-        # If labels are -100, we mask them out.
-        mask = y != -100
-        
-        loss = nn.losses.cross_entropy(logits, y, reduction="none")
-        loss = (loss * mask).sum() / mask.sum()
-        
-        return loss
-
-    # State for training
-    state = [model.state, optimizer.state]
-
-    @mx.compile
-    def step(X, y):
-        loss, grads = mx.value_and_grad(model, loss_fn)(model, X, y)
-        optimizer.update(model, grads)
-        return loss
-
-    # Training Loop
-    print("Starting training...")
-    
-    # Simple data iterator (placeholder for full collator)
-    # In a real script, we'd need a collator to pad sequences to the same length in a batch.
-    # Since batch_size=1, we can just iterate.
-    
-    step_count = 0
-    losses = []
-    
-    for epoch in range(num_epochs):
-        print(f"Epoch {epoch+1}/{num_epochs}")
-        for i, item in enumerate(dataset):
-            # Tokenize
-            # Note: In a real loop we'd pre-tokenize or use a map function
-            text = item['text'] # Assuming 'text' column
-            tokens = tokenizer.encode(text)
-            
-            # Convert to MLX array
-            # Add batch dimension
-            X = mx.array([tokens])
-            y = mx.array([tokens]) # Self-supervised
-            
-            # Update step
-            # Note: Gradient accumulation is complex to implement manually in a simple loop 
-            # without a custom accumulated optimizer wrapper in MLX currently.
-            # For this refactor, we will run standard SGD step for simplicity 
-            # or we would need to accumulate grads manually.
-            # Given the user wants "behavior to remain the same", we'll stick to batch_size=1 updates
-            # but note that effective batch size is smaller than requested (1 vs 8).
-            
-            loss = step(X, y)
-            mx.eval(state) # Ensure computation happens
-            
-            losses.append(loss.item())
-            step_count += 1
-            
-            if step_count % logging_steps == 0:
-                avg_loss = np.mean(losses[-logging_steps:])
-                print(f"Step {step_count}, Loss: {avg_loss:.4f}")
-
-    # Save adapters
-    print(f"Saving adapters to {output_dir}")
-    save(output_dir, model) # This saves the LoRA weights
 
 if __name__ == "__main__":
     main()

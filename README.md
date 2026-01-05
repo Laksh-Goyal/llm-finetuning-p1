@@ -73,3 +73,46 @@ This repo uses the **mlx** framework for fast training on Apple Silicon.
 ```bash
 pip install mlx-lm
 pip install transformers datasets peft bitsandbytes accelerate trl
+
+# LLM Fine-Tuning Project — FinTech Domain (MLX + LoRA)
+
+This project demonstrates end-to-end supervised fine-tuning (SFT) of an open-weight Large Language Model using a curated FinTech dataset. The goal is to adapt a general-purpose instruction model to produce more precise, domain-specific responses for credit, lending, and risk-related questions.
+
+The project emphasizes **data quality, reproducibility, and framework-level engineering decisions**, rather than benchmark chasing.
+
+---
+
+## Project Overview
+
+- **Base Model:** Llama-3 8B Instruct (4-bit, MLX)
+- **Fine-Tuning Method:** LoRA (Low-Rank Adaptation)
+- **Framework:** MLX (Apple Silicon–optimized)
+- **Domain:** FinTech (credit risk, lending, underwriting)
+- **Dataset Size:** ~484 curated instruction–response pairs
+
+---
+
+## Why MLX?
+
+MLX was selected to enable efficient LoRA fine-tuning on Apple Silicon hardware while preserving the same conceptual workflow used in Hugging Face–based training pipelines. This allows rapid iteration and experimentation without access to large GPU instances.
+
+A Hugging Face–based replication and comparison is planned as a follow-up step.
+
+---
+
+## Dataset
+
+The dataset (`data/sft.jsonl`) was curated from a large open instruction corpus (~70k samples) using:
+
+- Domain keyword filtering
+- Length constraints
+- Manual review
+- Blacklist-based cleanup to remove meta, off-domain, and low-quality responses
+
+Each example follows a simple schema:
+
+```json
+{
+  "instruction": "...",
+  "response": "..."
+}
