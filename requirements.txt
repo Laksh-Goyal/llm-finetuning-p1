@@ -9,3 +9,4 @@ uvicorn
 vllm
 wandb
 mlx_lm
+mlx_lm_lora
