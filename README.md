@@ -12,21 +12,22 @@ The project is optimized for **Apple Silicon (M4 Pro / M3 / M2)** and **GPU clou
 
 ---
 
-# 🚀 Project Overview
+# Project Overview
 
-The goal is to fine-tune an LLM (Llama-3-8B or Mistral-7B) to perform accurate, reliable domain reasoning for:
+This project demonstrates an end-to-end, **production-oriented fine-tuning pipeline** for large language models (LLMs) applied to **FinTech and lending-domain tasks**. The focus is on improving **domain relevance, decision-oriented reasoning, and response completeness** using parameter-efficient fine-tuning techniques.
 
-- **Credit risk explanations**
-- **Loan underwriting**
-- **PD / LGD modeling Q&A**
-- **Financial compliance**
-- **User-facing FinTech assistant tasks**
+The pipeline is structured into two primary training stages:
+
+1. **Supervised Fine-Tuning (SFT)** using Hugging Face + TRL + LoRA
+2. **Direct Preference Optimization (DPO)** (planned / next stage)
+
+The repository also includes dataset preparation, evaluation methodology, and deployment-ready inference components.
 
 The pipeline reflects what ML Engineers and Applied Scientists do at companies like **G42, e&, AIQ, OpenAI partners, Stripe, Klarna, and Goldman Sachs**.
 
 ---
 
-# 🧱 Architecture
+# Architecture
 
           ┌────────────────────────────┐
           │   Raw Dataset (Domain)     │
@@ -38,38 +39,173 @@ The pipeline reflects what ML Engineers and Applied Scientists do at companies l
           │  - DPO preference pairs    │
           └──────────────┬─────────────┘
                          ▼
-     ┌───────────────────────────────┐
-     │  Supervised Fine-Tuning (SFT) │
-     │  LoRA + 4-bit QLoRA           │
-     └──────────────┬────────────────┘
-                     ▼
-      ┌────────────────────────────┐
-      │        DPO Training        │
-      │ (Align to preferred output)│
-      └──────────────┬─────────────┘
-                     ▼
-     ┌────────────────────────────────┐
-     │         Evaluation Suite       │
-     │  - Domain eval set             │
-     │  - Hallucination tests         │
-     │  - MMLU subset                 │
-     │  - Response quality scoring    │
-     └──────────────┬─────────────────┘
-                     ▼
- ┌────────────────────────────────────────┐
- │ Deployment (FastAPI + VLLM)            │
- │ - GPU inference                        │
- │ - Low-latency server                   │
- └────────────────────────────────────────┘
+         ┌───────────────────────────────┐
+         │  Supervised Fine-Tuning (SFT) │
+         │  LoRA + 4-bit QLoRA           │
+         └──────────────┬────────────────┘
+                        ▼
+          ┌────────────────────────────┐
+          │        DPO Training        │
+          │ (Align to preferred output)│
+          └──────────────┬─────────────┘
+                         ▼
+        ┌────────────────────────────────┐
+        │         Evaluation Suite       │
+        │  - Domain eval set             │
+        │  - Hallucination tests         │
+        │  - MMLU subset                 │
+        │  - Response quality scoring    │
+        └──────────────┬─────────────────┘
+                       ▼
+    ┌────────────────────────────────────────┐
+    │ Deployment (FastAPI + VLLM)            │
+    │ - GPU inference                        │
+    │ - Low-latency server                   │
+    └────────────────────────────────────────┘
+
 
 ---
 
-# 🛠 Mac-Optimized Training (Apple Silicon)
+## Dataset
 
-This repo uses the **mlx** framework for fast training on Apple Silicon.
+The supervised fine-tuning dataset was curated from a large open instruction corpus (~70,000 samples) using a multi-stage filtering and cleaning process:
 
-## Install mlx:
+- Domain-specific keyword filtering (FinTech, lending, credit risk)
+- Response quality and relevance constraints
+- Blacklist-based cleanup to remove meta, off-domain, and low-quality responses
+- Manual spot checks for correctness and clarity
 
-```bash
-pip install mlx-lm
-pip install transformers datasets peft bitsandbytes accelerate trl
+The final SFT dataset contains **~500 high-quality instruction–response pairs** focused on:
+- Lending metrics (DTI, credit utilization)
+- Loan approval logic
+- Risk and policy reasoning
+- Financial product explanations
+
+Each example follows the schema:
+
+```json
+{
+  "instruction": "...",
+  "response": "..."
+}
+```
+
+---
+
+## Supervised Fine-Tuning (SFT)
+
+### Training Setup
+
+Supervised fine-tuning was performed using the **Hugging Face ecosystem** with parameter-efficient fine-tuning via **LoRA (PEFT)**.
+
+**Model:**
+- `mistralai/Mistral-7B-Instruct-v0.2`
+
+**Training stack:**
+- `transformers`
+- `trl` (SFTTrainer)
+- `peft` (LoRA)
+- `datasets`
+- `accelerate`
+
+**Hardware:**
+- Apple Silicon (Mac M4 Pro) using PyTorch MPS backend
+
+Only LoRA adapter weights were trained; the base model weights remained frozen.
+
+---
+
+### LoRA Configuration
+
+```text
+Rank (r):        16
+Alpha:           32
+Dropout:         0.05
+Target modules:  q_proj, v_proj
+```
+
+---
+
+### Training Metrics
+
+Training was run for **1 epoch**, which was sufficient given the curated dataset size.
+
+Key observations:
+
+- Training loss decreased steadily from ~1.8 to ~1.0
+- Mean token accuracy improved from ~0.65 to ~0.74
+- No instability, NaNs, or divergence observed
+- Training completed in ~8–9 minutes on Apple Silicon
+
+---
+
+## 🔍 Evaluation & Results
+
+### Evaluation Methodology
+
+Evaluation focused on **behavioral improvements**, not just loss reduction. The fine-tuned model was compared against the base model using **side-by-side qualitative evaluation**.
+
+Prompts were selected to test:
+- Definitions of financial concepts
+- Applied lending decisions
+- Policy reasoning
+- Edge cases (e.g. high income but high DTI)
+- Comparative reasoning (DTI vs credit utilization)
+- Out-of-domain sanity checks
+
+### Evaluation Criteria
+
+Each response was evaluated on:
+- Domain relevance
+- Decision clarity
+- Completeness (no truncation)
+- Professional tone
+- Factual correctness
+
+---
+
+### Results Summary
+
+Across all tested prompts, the fine-tuned model consistently outperformed the base model.
+
+| Category | Base Model | Fine-Tuned Model |
+|-------|------------|------------------|
+| Definitions | Generic, sometimes truncated | Clear and domain-aligned |
+| Applied decisions | Often incomplete | Concise and decisive |
+| Policy reasoning | Rambling or cut off | Focused risk framing |
+| Edge cases | Inconsistent | Structured explanations |
+| Comparisons | Frequently truncated | Complete and accurate |
+
+**Overall result:** The fine-tuned model showed **improved completeness, stronger domain framing, and more decision-oriented responses** without introducing hallucinations or factual degradation.
+
+---
+
+### Example Comparison
+
+**Prompt:**
+> Explain debt-to-income ratio in lending.
+
+**Base model (excerpt):**
+> "...The resulting ratio expresses the proportion of income that goes towards debt repayment... Lenders use DTI to evaluate the borrower's ability to—"
+
+*(response truncated)*
+
+**Fine-tuned model (excerpt):**
+> "Debt-to-income ratio (DTI) is a measure of a borrower's ability to repay their debts. Lenders use DTI to assess creditworthiness and may apply maximum DTI thresholds when approving loans."
+
+---
+
+### Conclusion
+
+After a single epoch of LoRA-based SFT, the model demonstrated **clear behavioral improvements** across all evaluation categories. Given the strength and consistency of results, no additional SFT epochs were run to avoid overfitting.
+
+The SFT phase is considered **complete and successful**, and the project proceeds to **Direct Preference Optimization (DPO)** as the next stage for refining response nuance and uncertainty handling.
+
+---
+
+## 🔮 Next Steps
+
+- Direct Preference Optimization (DPO)
+- Automated evaluation metrics
+- Inference benchmarking (HF vs MLX)
+- Deployment via FastAPI + VLLM
