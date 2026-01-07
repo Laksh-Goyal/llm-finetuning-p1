@@ -203,9 +203,60 @@ The SFT phase is considered **complete and successful**, and the project proceed
 
 ---
 
-## 🔮 Next Steps
+## Evaluation
 
-- Direct Preference Optimization (DPO)
-- Automated evaluation metrics
-- Inference benchmarking (HF vs MLX)
-- Deployment via FastAPI + VLLM
+### Setup
+
+We evaluated the fine-tuned model against the base model using a fixed set of held-out prompts designed to test **lending decision reasoning**, rather than factual recall. The prompts reflect realistic underwriting scenarios, including:
+
+- borderline debt-to-income (DTI) cases  
+- high income combined with excessive leverage  
+- secured loans with weak credit profiles  
+- clear high-risk denial scenarios  
+- conceptual questions framed from a lender’s perspective  
+
+All prompts were evaluated side by side to isolate behavioral differences introduced by supervised fine-tuning.
+
+---
+
+### Evaluation Criteria
+
+Responses were assessed qualitatively across the following dimensions:
+
+- **Decision correctness** – Plausibility of approval, denial, or pricing outcome  
+- **Numeric reasoning** – Correct use of DTI, income, debt, and credit score  
+- **Risk tradeoff explanation** – Clear articulation of why a lender would make a given decision  
+- **Denial clarity** – Ability to clearly reject high-risk cases without excessive hedging  
+- **Tone and framing** – Professional, lender-centric, non-advisory style  
+
+---
+
+### Results
+
+The fine-tuned model demonstrates a clear and consistent improvement over the base model.
+
+**Key improvements observed:**
+
+- **Stronger numeric grounding**: The SFT model consistently computes and references DTI and other quantitative risk factors, whereas the base model often remains descriptive or generic.
+- **Lender-centric reasoning**: Responses are framed from an underwriting perspective, focusing on repayment capacity, exposure, and risk, rather than educational explanations.
+- **Improved pricing logic**: In borderline cases, the model reliably distinguishes between outright denial and approval with elevated interest rates.
+- **More consistent structure and tone**: Outputs are concise, structured, and aligned with the reasoning patterns seen in the training data.
+
+---
+
+### Limitations
+
+Some limitations remain and are explicitly documented:
+
+- **Denial finality**: In extreme risk scenarios, the model occasionally uses cautious language (e.g., “approval is uncertain”) rather than issuing a hard denial.
+- **Approval bias**: The training data intentionally mirrors real-world lending distributions, with approvals and pricing outcomes more common than denials. As a result, denial behavior improves relative to the base model but is not perfectly balanced.
+
+These behaviors are expected given the dataset composition and are acceptable for the scope of this project.
+
+---
+
+### Summary
+
+Supervised fine-tuning produced a meaningful behavioral shift from generic financial explanations to **numeric, risk-based lending decision reasoning**. The evaluation confirms that the model learned domain-specific judgment rather than memorizing definitions, validating both the dataset construction and the training approach.
+
+
