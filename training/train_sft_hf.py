@@ -9,7 +9,7 @@ from helpers import load_dataset_base, format_prompt_example
 # Config 
 MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
 DATA_PATH = "data/sft.jsonl"
-OUTPUT_DIR = "outputs/sft_hf"
+OUTPUT_DIR = "outputs/sft_hf_v2"
 
 lora_config = LoraConfig(
     r=16,
