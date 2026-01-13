@@ -1,13 +1,15 @@
+import sys
 import time
-
 from mlx_lm_lora.train import main as mlx_train
 
 def main():
     start_time = time.time()
-    args = [
+
+    sys.argv = [
+        "train_sft_mlx.py",
         "--model", "mlx-community/Mistral-7B-Instruct-v0.2-4bit",
         "--train",
-        "--data", "data/sft",
+        "--data", "data/sft_mlx",
         "--output-dir", "outputs/sft_mlx",
 
         # LoRA config
@@ -22,13 +24,13 @@ def main():
         "--save-interval", "200",
 
         # Context
-        "--max-seq-length", "512",
+        "--max-seq-length", "1024",
         "--seed", "42",
     ]
 
-    mlx_train(args)
+    mlx_train()
+
     print(f"Training complete in {time.time() - start_time:.2f} seconds")
 
 if __name__ == "__main__":
     main()
-
