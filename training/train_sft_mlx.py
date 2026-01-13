@@ -7,29 +7,34 @@ def main():
 
     sys.argv = [
         "train_sft_mlx.py",
-        "--model", "mlx-community/Mistral-7B-Instruct-v0.2-4bit",
-        "--train",
-        "--data", "data/sft_mlx",
-        "--output-dir", "outputs/sft_mlx",
 
-        # LoRA config
-        "--lora-r", "16",
-        "--lora-alpha", "32",
-        "--lora-dropout", "0.05",
+        # Model
+        "--model", "mlx-community/Mistral-7B-Instruct-v0.2-4bit",
+
+        # Training mode
+        "--train",
+        "--train-type", "lora",
+        "--train-mode", "sft",
+
+        # Data
+        "--data", "data/sft_mlx",
+
+        # Output (LoRA adapters)
+        "--adapter-path", "outputs/sft_mlx",
 
         # Training config
         "--batch-size", "1",
-        "--lr", "2e-4",
-        "--iters", "600",
-        "--save-interval", "200",
+        "--learning-rate", "3e-5",
+        "--iters", "300",
+        "--save-every", "100",
 
         # Context
         "--max-seq-length", "1024",
+        "--grad-checkpoint",
         "--seed", "42",
     ]
 
     mlx_train()
-
     print(f"Training complete in {time.time() - start_time:.2f} seconds")
 
 if __name__ == "__main__":

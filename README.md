@@ -259,4 +259,5 @@ These behaviors are expected given the dataset composition and are acceptable fo
 
 Supervised fine-tuning produced a meaningful behavioral shift from generic financial explanations to **numeric, risk-based lending decision reasoning**. The evaluation confirms that the model learned domain-specific judgment rather than memorizing definitions, validating both the dataset construction and the training approach.
 
-
+# MLX Training
+Training complete in 508.95 seconds
