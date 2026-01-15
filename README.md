@@ -261,3 +261,85 @@ Supervised fine-tuning produced a meaningful behavioral shift from generic finan
 
 # MLX Training
 Training complete in 508.95 seconds
+
+## Hugging Face vs MLX Fine-Tuning: Experiments & Findings
+
+This project compares multiple fine-tuning strategies for a 7B instruction-tuned LLM, with emphasis on **data quality, training stability, and framework-level tradeoffs**. The same curated dataset and evaluation prompts were used to ensure a fair comparison.
+
+---
+
+### Hugging Face (PyTorch) LoRA SFT
+
+The initial baseline used Hugging Face (`transformers`, `trl`, `peft`) with LoRA adapters.
+
+**Key characteristics**
+- Explicit LoRA hyperparameters (rank, alpha, dropout)
+- Automatic chat template handling
+- Flexible trainer APIs and logging
+- Rapid iteration during data and formatting experiments
+
+**Observed behavior**
+- Stable convergence with minimal tuning
+- Strong domain grounding (DTI, approval vs denial, pricing logic)
+- Slightly more verbose, explanatory responses
+
+This served as the **reference SFT baseline** for output quality.
+
+---
+
+### MLX (Apple Silicon) LoRA SFT
+
+The same learning objective was re-implemented using **MLX**, optimized for Apple Silicon.
+
+**Key differences vs Hugging Face**
+- CLI-first workflow with stricter dataset contracts
+- Implicit LoRA defaults (fewer exposed knobs)
+- No automatic chat template handling
+- Deterministic greedy decoding by default
+
+**Engineering work required**
+- Rebuilt the dataset to remove embedded chat tokens (`<s>`, `[INST]`, `[/INST]`)
+- Diagnosed tokenizer–training mismatches causing `<unk>` generation
+- Resolved numerical instability by lowering learning rate and enabling gradient checkpointing
+- Ensured fair evaluation by explicitly applying the tokenizer chat template at inference time
+
+**Observed behavior**
+- More concise, decision-oriented responses
+- Clear approval vs denial boundaries
+- Comparable quality to Hugging Face after stabilization
+
+---
+
+### Dataset Engineering & Enhancements
+
+Dataset quality proved to be the most impactful factor. Improvements included:
+- Hard filtering of large open datasets (UltraChat, OpenHermes)
+- Structural validation of instruction–response pairs
+- Manual creation of gold lending decision examples
+- Synthetic data generation to improve denial coverage
+- Post-generation scoring and filtering
+- Final balancing across approval and denial scenarios
+
+The final dataset emphasized **decision reasoning over generic explanation**, directly shaping model behavior.
+
+---
+
+### Summary of Findings
+
+| Aspect | Hugging Face SFT | MLX SFT |
+|------|------------------|---------|
+| Training stack | PyTorch / Transformers | MLX (Apple Silicon) |
+| LoRA config | Explicit | Implicit defaults |
+| Chat templates | Automatic | Manual |
+| Stability | High by default | Required LR tuning |
+| Output style | More verbose | More concise |
+| Strength | Tooling & flexibility | Determinism & efficiency |
+
+---
+
+### Key Takeaways
+
+- Data quality outweighed framework choice in driving behavior.
+- Framework defaults matter: tokenization and stability differ significantly.
+- MLX requires stricter discipline but enables efficient, deterministic execution.
+- Controlled evaluation with identical prompts was essential for fair comparison.
