@@ -136,8 +136,16 @@ dmypy.json
 cython_debug/
 
 # Models
-models/*
-!models/.gitkeep
+outputs/*
+!outputs/.gitkeep
+
+# Large ML artifacts
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+*.npz
+
 
 # Data
 !data/.gitkeep
