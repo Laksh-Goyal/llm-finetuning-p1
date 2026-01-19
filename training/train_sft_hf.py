@@ -4,7 +4,18 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import LoraConfig
 from trl import SFTTrainer
 from transformers import TrainingArguments
-from helpers import load_dataset_base, format_prompt_example
+from datasets import load_dataset
+
+
+def format_prompt_example(example: dict) -> str:
+    return (
+        f"<s>[INST] {example['instruction']} [/INST] "
+        f"{example['response']}</s>"
+    )
+
+
+def load_dataset_base(path: str):
+    return load_dataset("json", data_files=path, split="train")
 
 # Config 
 MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"

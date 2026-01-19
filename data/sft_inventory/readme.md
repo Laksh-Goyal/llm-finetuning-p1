@@ -1,1 +1,0 @@
-This directory contains the synthetic data for the SFT inventory. It's for cleanliness, and the files were originally in the data directory, and have been moved for cleanliness

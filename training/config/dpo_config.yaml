@@ -1,0 +1,69 @@
+# DPO Training Configuration
+
+# Model Configuration
+model:
+  base_model_path: "mlx-community/Mistral-7B-Instruct-v0.2-4bit"  # Base Mistral model
+  output_dir: "outputs/dpo-mlx"
+
+# Data Configuration
+data:
+  train_file: "data/dpo.jsonl"
+  validation_split: 0.1  # 10% for validation
+  max_prompt_length: 512
+  max_response_length: 512
+  seed: 42
+
+# LoRA Configuration
+lora:
+  r: 8  # Rank
+  lora_alpha: 16  # Alpha parameter
+  lora_dropout: 0.05  # Dropout for regularization
+  target_modules:
+    - "q_proj"
+    - "v_proj"
+    - "k_proj"  # Added for better coverage
+    - "o_proj"  # Added for better coverage
+
+# DPO Training Configuration
+dpo:
+  beta: 0.05  # DPO temperature (higher = more conservative, typical range: 0.1-0.5)
+  label_smoothing: 0.1  # Label smoothing for stability
+  loss_type: "sigmoid"  # Options: sigmoid, hinge, ipo
+
+# Training Arguments
+training:
+  num_epochs: 1
+  batch_size: 1  # Keep at 1 for Apple Silicon memory constraints
+  gradient_accumulation_steps: 4  # Effective batch size = 4
+  learning_rate: 3.0e-6  # Conservative LR for DPO
+  warmup_ratio: 0.1  # 10% warmup
+  lr_scheduler_type: "cosine"  # Cosine decay
+  weight_decay: 0.01
+  max_grad_norm: 1.0  # Gradient clipping
+  
+# Optimization
+optimization:
+  gradient_checkpointing: true  # Save memory
+  mixed_precision: false  # MLX handles this automatically
+  
+# Logging and Checkpointing
+logging:
+  log_interval: 10  # Log every N steps
+  eval_interval: 50  # Evaluate every N steps
+  save_interval: 100  # Save checkpoint every N steps
+  save_total_limit: 3  # Keep only last 3 checkpoints
+  log_file: "outputs/dpo_training.log"
+  metrics_file: "outputs/dpo_metrics.json"
+  
+# Weights & Biases (optional)
+wandb:
+  enabled: false  # Set to true to enable W&B logging
+  project: "llm-finetuning-dpo"
+  run_name: "dpo-fintech-mlx"
+  entity: null  # Your W&B username/team
+
+# Advanced Options
+advanced:
+  resume_from_checkpoint: null  # Path to checkpoint to resume from
+  save_only_adapters: true  # Save only LoRA adapters (not full model)
+  eval_on_start: true  # Run evaluation before training

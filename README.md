@@ -1,233 +1,161 @@
-# LLM Fine-Tuning Project (SFT + DPO) — FinTech / Domain-Specific LLM
+# Domain-Specialized LLM Alignment with SFT + DPO (Lending Risk)
 
-This repository contains a full end-to-end pipeline for fine-tuning a large language model using:
+## Overview
+This project demonstrates an **end-to-end large language model alignment pipeline** for a real-world decision-making domain: **consumer lending and credit risk assessment**.
 
-- **Supervised Fine-Tuning (SFT)**
-- **Direct Preference Optimization (DPO)**
-- **Custom domain datasets (FinTech, lending, credit models, etc.)**
-- **Evaluation toolkit**
-- **Deployment-ready inference server (FastAPI + VLLM)**
+The goal is not to chase benchmark scores, but to show how modern alignment techniques—**Supervised Fine-Tuning (SFT)** and **Direct Preference Optimization (DPO)**—can be applied *correctly* to produce **clearer, more decisive, and more consistent model behavior** in high-stakes scenarios.
 
-The project is optimized for **Apple Silicon (M4 Pro / M3 / M2)** and **GPU cloud deployment** for final inference.
+The repository is intentionally designed to mirror how these techniques are used in practice:
+- Domain-specific SFT to establish grounding and numerical correctness
+- Careful DPO to refine **decision preferences**, not rewrite behavior
+- Qualitative evaluation focused on reasoning quality and risk tradeoffs
 
----
-
-# Project Overview
-
-This project demonstrates an end-to-end, **production-oriented fine-tuning pipeline** for large language models (LLMs) applied to **FinTech and lending-domain tasks**. The focus is on improving **domain relevance, decision-oriented reasoning, and response completeness** using parameter-efficient fine-tuning techniques.
-
-The pipeline is structured into two primary training stages:
-
-1. **Supervised Fine-Tuning (SFT)** using Hugging Face + TRL + LoRA
-2. **Direct Preference Optimization (DPO)** (planned / next stage)
-
-The repository also includes dataset preparation, evaluation methodology, and deployment-ready inference components.
-
-The pipeline reflects what ML Engineers and Applied Scientists do at companies like **G42, e&, AIQ, OpenAI partners, Stripe, Klarna, and Goldman Sachs**.
+This project is suitable as a **portfolio example for applied ML / LLM engineering roles**, particularly those involving alignment, fine-tuning, or decision-support systems.
 
 ---
 
-# Architecture
+## End-to-End Pipeline
 
-          ┌────────────────────────────┐
-          │   Raw Dataset (Domain)     │
-          └──────────────┬─────────────┘
-                         ▼
-          ┌────────────────────────────┐
-          │   Data Cleaning + Prep     │
-          │  - SFT jsonl               │
-          │  - DPO preference pairs    │
-          └──────────────┬─────────────┘
-                         ▼
-         ┌───────────────────────────────┐
-         │  Supervised Fine-Tuning (SFT) │
-         │  LoRA + 4-bit QLoRA           │
-         └──────────────┬────────────────┘
-                        ▼
-          ┌────────────────────────────┐
-          │        DPO Training        │
-          │ (Align to preferred output)│
-          └──────────────┬─────────────┘
-                         ▼
-        ┌────────────────────────────────┐
-        │         Evaluation Suite       │
-        │  - Domain eval set             │
-        │  - Hallucination tests         │
-        │  - MMLU subset                 │
-        │  - Response quality scoring    │
-        └──────────────┬─────────────────┘
-                       ▼
-    ┌────────────────────────────────────────┐
-    │ Deployment (FastAPI + VLLM)            │
-    │ - GPU inference                        │
-    │ - Low-latency server                   │
-    └────────────────────────────────────────┘
-
-
----
-
-## Dataset
-
-The supervised fine-tuning dataset was curated from a large open instruction corpus (~70,000 samples) using a multi-stage filtering and cleaning process:
-
-- Domain-specific keyword filtering (FinTech, lending, credit risk)
-- Response quality and relevance constraints
-- Blacklist-based cleanup to remove meta, off-domain, and low-quality responses
-- Manual spot checks for correctness and clarity
-
-The final SFT dataset contains **~500 high-quality instruction–response pairs** focused on:
-- Lending metrics (DTI, credit utilization)
-- Loan approval logic
-- Risk and policy reasoning
-- Financial product explanations
-
-Each example follows the schema:
-
-```json
-{
-  "instruction": "...",
-  "response": "..."
-}
+```
+Raw prompts
+   ↓
+Supervised Fine-Tuning (LoRA)
+   ↓
+Preference Dataset Construction
+   ↓
+Direct Preference Optimization (DPO)
+   ↓
+Side-by-side Evaluation (Base vs SFT vs DPO)
 ```
 
----
-
-## Supervised Fine-Tuning (SFT)
-
-### Training Setup
-
-Supervised fine-tuning was performed using the **Hugging Face ecosystem** with parameter-efficient fine-tuning via **LoRA (PEFT)**.
-
-**Model:**
-- `mistralai/Mistral-7B-Instruct-v0.2`
-
-**Training stack:**
-- `transformers`
-- `trl` (SFTTrainer)
-- `peft` (LoRA)
-- `datasets`
-- `accelerate`
-
-**Hardware:**
-- Apple Silicon (Mac M4 Pro) using PyTorch MPS backend
-
-Only LoRA adapter weights were trained; the base model weights remained frozen.
+Each stage is isolated, reproducible, and evaluated independently.
 
 ---
 
-### LoRA Configuration
+## Dataset Construction
 
-```text
-Rank (r):        16
-Alpha:           32
-Dropout:         0.05
-Target modules:  q_proj, v_proj
-```
+The dataset consists of lending-related prompts designed to test:
+- Debt-to-income (DTI) reasoning
+- Credit score interpretation
+- Secured vs unsecured loan risk
+- Borderline approval vs denial cases
+- Conceptual lender decision logic
 
----
+For SFT, each prompt was created using a gold standard generated from ChatGPT 5.2 and several variants generated from the same. The variants were sampled from the same distribution as the gold standard.
 
-### Training Metrics
+For DPO, each prompt includes:
+- A **preferred (chosen)** response (from the SFT model)
+- One or more **less-preferred (rejected)** responses (sampled variants)
 
-Training was run for **1 epoch**, which was sufficient given the curated dataset size.
-
-Key observations:
-
-- Training loss decreased steadily from ~1.8 to ~1.0
-- Mean token accuracy improved from ~0.65 to ~0.74
-- No instability, NaNs, or divergence observed
-- Training completed in ~8–9 minutes on Apple Silicon
+This reflects a common real-world setup where preference data is synthetic but anchored to a strong SFT baseline.
 
 ---
 
-## 🔍 Evaluation & Results
+## Training
 
-### Evaluation Methodology
+### Supervised Fine-Tuning (SFT)
 
-Evaluation focused on **behavioral improvements**, not just loss reduction. The fine-tuned model was compared against the base model using **side-by-side qualitative evaluation**.
+- Base model: `Mistral-7B-Instruct-v0.2`
+- Method: LoRA-based SFT
+- Objective: Domain grounding and numerical consistency
 
-Prompts were selected to test:
-- Definitions of financial concepts
-- Applied lending decisions
-- Policy reasoning
-- Edge cases (e.g. high income but high DTI)
-- Comparative reasoning (DTI vs credit utilization)
-- Out-of-domain sanity checks
+After SFT, the model reliably:
+- Computes and references DTI correctly
+- Uses lender-appropriate terminology
+- Produces concise, structured explanations
 
-### Evaluation Criteria
+---
 
-Each response was evaluated on:
-- Domain relevance
+### Direct Preference Optimization (DPO)
+
+- Starting point: SFT-trained model
+- Objective: **Refine decision preferences**, not content
+- Key behaviors encouraged:
+  - Reduced hedging in high-risk cases
+  - Clearer approval vs denial decisions
+  - Better prioritization of repayment capacity
+
+Special care was taken to:
+- Correctly mask prompt tokens during training
+- Apply loss only to response tokens
+- Keep DPO pressure intentionally low
+
+This avoids common failure modes such as repetition, collapse, or hallucination.
+
+---
+
+## Evaluation: Base vs SFT vs DPO
+
+### Evaluation Objective
+
+The evaluation focuses on **behavioral differences**, not benchmark scores. Specifically, we assess whether each training stage improves:
 - Decision clarity
-- Completeness (no truncation)
-- Professional tone
-- Factual correctness
+- Numeric grounding
+- Risk tradeoff articulation
+- Structural completeness
 
 ---
 
-### Results Summary
+### Models Compared
 
-Across all tested prompts, the fine-tuned model consistently outperformed the base model.
+| Model | Description |
+|------|-------------|
+| **Base** | Mistral-7B-Instruct (no fine-tuning) |
+| **SFT** | Base + LoRA supervised fine-tuning |
+| **DPO** | SFT model refined with preference optimization |
 
-| Category | Base Model | Fine-Tuned Model |
-|-------|------------|------------------|
-| Definitions | Generic, sometimes truncated | Clear and domain-aligned |
-| Applied decisions | Often incomplete | Concise and decisive |
-| Policy reasoning | Rambling or cut off | Focused risk framing |
-| Edge cases | Inconsistent | Structured explanations |
-| Comparisons | Frequently truncated | Complete and accurate |
-
-**Overall result:** The fine-tuned model showed **improved completeness, stronger domain framing, and more decision-oriented responses** without introducing hallucinations or factual degradation.
+All models are evaluated using identical prompts and decoding parameters.
 
 ---
 
-### Example Comparison
+### Prompt - Response Pairs
 
-**Prompt:**
-> Explain debt-to-income ratio in lending.
-
-**Base model (excerpt):**
-> "...The resulting ratio expresses the proportion of income that goes towards debt repayment... Lenders use DTI to evaluate the borrower's ability to—"
-
-*(response truncated)*
-
-**Fine-tuned model (excerpt):**
-> "Debt-to-income ratio (DTI) is a measure of a borrower's ability to repay their debts. Lenders use DTI to assess creditworthiness and may apply maximum DTI thresholds when approving loans."
+Prompt: 
+A borrower requests a $45,000 unsecured personal loan. They earn $11,000 per month, already carry $6,200 in monthly debt, and have a credit score of 690.
+How would a lender likely decide?
 
 ---
 
-### Conclusion
+**Response (Base)**:
+A lender evaluates a borrower's application for a loan using several factors, including income, debt-to-income ratio, credit score, and other financial information. Based on the provided information, here's how a lender might make a decision:
 
-After a single epoch of LoRA-based SFT, the model demonstrated **clear behavioral improvements** across all evaluation categories. Given the strength and consistency of results, no additional SFT epochs were run to avoid overfitting.
+Debt-to-Income Ratio: The borrower's monthly debt of $6,200 and monthly income of $11,000 results in a debt-to-income ratio of 56.36%, which is relatively high and indicates that the borrower has a significant amount of existing debt relative to their income.
 
-The SFT phase is considered **complete and successful**, and the project proceeds to **Direct Preference Optimization (DPO)** as the next stage for refining response nuance and uncertainty handling.
-
----
-
-## Evaluation
-
-### Setup
-
-We evaluated the fine-tuned model against the base model using a fixed set of held-out prompts designed to test **lending decision reasoning**, rather than factual recall. The prompts reflect realistic underwriting scenarios, including:
-
-- borderline debt-to-income (DTI) cases  
-- high income combined with excessive leverage  
-- secured loans with weak credit profiles  
-- clear high-risk denial scenarios  
-- conceptual questions framed from a lender’s perspective  
-
-All prompts were evaluated side by side to isolate behavioral differences introduced by supervised fine-tuning.
+**Observation (Base)**:
+Fluent and correct, but largely descriptive. The model explains the risk but avoids committing to a clear approval or rejection.
 
 ---
 
-### Evaluation Criteria
+**Response (SFT)**:
+A lender would likely consider the borrower's monthly debt-to-income ratio, credit score, and income to determine whether they can afford the monthly payments on a $45,000 unsecured personal loan.
 
-Responses were assessed qualitatively across the following dimensions:
+The borrower's debt-to-income ratio is 56.36% ($6,200 ÷ $11,000), which is relatively high. Lenders typically prefer borrowers with a debt-to-income ratio below 36%, making this loan request higher risk.
 
-- **Decision correctness** – Plausibility of approval, denial, or pricing outcome  
-- **Numeric reasoning** – Correct use of DTI, income, debt, and credit score  
-- **Risk tradeoff explanation** – Clear articulation of why a lender would make a given decision  
-- **Denial clarity** – Ability to clearly reject high-risk cases without excessive hedging  
-- **Tone and framing** – Professional, lender-centric, non-advisory style  
+**Observation (SFT)**:
+Clear improvement in domain grounding and numeric reasoning, but still cautious in drawing a firm conclusion.
+
+---
+
+**Response (DPO)**:
+Based on the borrower's income, debt, and credit score, a lender would likely decline the loan request. The borrower's debt-to-income ratio is already high, and their credit score is below average. A lender would view this borrower as high risk and may not be willing to extend a loan of this size.
+
+**Observation (DPO)**:
+The model makes a clear lending decision, prioritizing repayment capacity over explanatory detail.
+This reflects DPO’s role as a decision preference refiner, not a content generator.
+
+
+
+---
+
+### Qualitative Results Summary
+
+| Dimension | Base | SFT | DPO |
+|---------|------|-----|-----|
+| Domain relevance | Generic | Strong | Strong |
+| Numeric reasoning | Inconsistent | Consistent | Consistent |
+| Decision clarity | Hedged | Moderate | **High** |
+| Denial confidence | Weak | Improved | **Clear** |
+| Fluency | High | High | High |
 
 ---
 
@@ -244,52 +172,34 @@ The fine-tuned model demonstrates a clear and consistent improvement over the ba
 
 ---
 
-### Limitations
+### Key Observations
 
-Some limitations remain and are explicitly documented:
+- **Base model**: Fluent but generic; often avoids firm decisions
+- **SFT model**: Domain-aligned and numerically grounded; still cautious
+- **DPO model**: More decisive in high-risk scenarios with minimal stylistic drift
 
-- **Denial finality**: In extreme risk scenarios, the model occasionally uses cautious language (e.g., “approval is uncertain”) rather than issuing a hard denial.
-- **Approval bias**: The training data intentionally mirrors real-world lending distributions, with approvals and pricing outcomes more common than denials. As a result, denial behavior improves relative to the base model but is not perfectly balanced.
+Importantly, DPO does *not* force changes where the preference signal is weak (e.g., conceptual questions), which is the desired behavior.
+
+---
+
+## Limitations & Learnings
+
+- Preference optimization is sensitive to masking and alignment details
+- DPO should be applied conservatively; visible stylistic changes are often a red flag
+- In narrow domains, SFT provides most of the gain; DPO provides **polish**, not transformation
+- In extreme risk scenarios, the model occasionally uses cautious language (e.g., “approval is uncertain”) rather than issuing a hard denial.
+- The training data intentionally mirrors real-world lending distributions, with approvals and pricing outcomes more common than denials. As a result, denial behavior improves relative to the base model but is not perfectly balanced.
 
 These behaviors are expected given the dataset composition and are acceptable for the scope of this project.
 
----
 
-### Summary
-
-Supervised fine-tuning produced a meaningful behavioral shift from generic financial explanations to **numeric, risk-based lending decision reasoning**. The evaluation confirms that the model learned domain-specific judgment rather than memorizing definitions, validating both the dataset construction and the training approach.
-
-# MLX Training
-Training complete in 508.95 seconds
-
-## Hugging Face vs MLX Fine-Tuning: Experiments & Findings
-
-This project compares multiple fine-tuning strategies for a 7B instruction-tuned LLM, with emphasis on **data quality, training stability, and framework-level tradeoffs**. The same curated dataset and evaluation prompts were used to ensure a fair comparison.
-
----
-
-### Hugging Face (PyTorch) LoRA SFT
-
-The initial baseline used Hugging Face (`transformers`, `trl`, `peft`) with LoRA adapters.
-
-**Key characteristics**
-- Explicit LoRA hyperparameters (rank, alpha, dropout)
-- Automatic chat template handling
-- Flexible trainer APIs and logging
-- Rapid iteration during data and formatting experiments
-
-**Observed behavior**
-- Stable convergence with minimal tuning
-- Strong domain grounding (DTI, approval vs denial, pricing logic)
-- Slightly more verbose, explanatory responses
-
-This served as the **reference SFT baseline** for output quality.
+These lessons are documented intentionally, as they reflect real-world alignment work.
 
 ---
 
 ### MLX (Apple Silicon) LoRA SFT
 
-The same learning objective was re-implemented using **MLX**, optimized for Apple Silicon.
+The same learning objective was re-implemented using **MLX**, optimized for Apple Silicon as an extra enhancement.
 
 **Key differences vs Hugging Face**
 - CLI-first workflow with stricter dataset contracts
@@ -309,37 +219,24 @@ The same learning objective was re-implemented using **MLX**, optimized for Appl
 - Comparable quality to Hugging Face after stabilization
 
 ---
+## Project Demonstrationss
 
-### Dataset Engineering & Enhancements
+This repository demonstrates:
+- Practical application of SFT and DPO
+- Correct handling of common alignment pitfalls
+- Evaluation focused on reasoning quality, not just outputs
 
-Dataset quality proved to be the most impactful factor. Improvements included:
-- Hard filtering of large open datasets (UltraChat, OpenHermes)
-- Structural validation of instruction–response pairs
-- Manual creation of gold lending decision examples
-- Synthetic data generation to improve denial coverage
-- Post-generation scoring and filtering
-- Final balancing across approval and denial scenarios
-
-The final dataset emphasized **decision reasoning over generic explanation**, directly shaping model behavior.
+It is intended to showcase **applied LLM engineering judgment**
 
 ---
 
-### Summary of Findings
+## Reproducibility
 
-| Aspect | Hugging Face SFT | MLX SFT |
-|------|------------------|---------|
-| Training stack | PyTorch / Transformers | MLX (Apple Silicon) |
-| LoRA config | Explicit | Implicit defaults |
-| Chat templates | Automatic | Manual |
-| Stability | High by default | Required LR tuning |
-| Output style | More verbose | More concise |
-| Strength | Tooling & flexibility | Determinism & efficiency |
+All training and evaluation scripts are included. The pipeline can be reproduced end-to-end with modest compute using LoRA adapters.
 
 ---
 
-### Key Takeaways
+## Contact
 
-- Data quality outweighed framework choice in driving behavior.
-- Framework defaults matter: tokenization and stability differ significantly.
-- MLX requires stricter discipline but enables efficient, deterministic execution.
-- Controlled evaluation with identical prompts was essential for fair comparison.
+If you are reviewing this project as part of a hiring or collaboration process and would like additional details on design decisions, tradeoffs, or extensions, feel free to reach out to lakshgoyal0812@gmail.com
+
